@@ -1,0 +1,4 @@
+;; Neo coding task patterns.
+;; Classifies task type and extracts language + description for LLM hand-off.
+;; Loaded at startup into bridge.neo's rule atom.
+[]

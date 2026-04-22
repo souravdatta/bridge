@@ -1,0 +1,4 @@
+;; Gandalf scheduling intent patterns.
+;; Extracted slots feed directly into Quartzite job creation.
+;; Loaded at startup into bridge.gandalf's rule atom.
+[]

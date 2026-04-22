@@ -1,0 +1,4 @@
+;; Kafka's persistent philosophical journal.
+;; Each entry: {:timestamp "..." :mode :ponder :topic "..." :conclusion "..." :open-questions [...]}
+;; Appended by the hypothesis-logger sub-agent. Loaded at Kafka startup.
+[]

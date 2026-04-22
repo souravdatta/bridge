@@ -1,0 +1,5 @@
+;; Uhura communication direction/mode patterns (target: 200+ rules).
+;; Covers: read/write, email/WhatsApp, fetch/filter/send, to/from whom.
+;; This is the largest pattern corpus in the system.
+;; Loaded at startup into bridge.uhura's rule atom.
+[]

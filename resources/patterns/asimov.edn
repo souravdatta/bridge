@@ -1,0 +1,5 @@
+;; Asimov story mode patterns.
+;; Classifies mode (start-chapter / continue / describe / outline / tone)
+;; and extracts story parameters for state management.
+;; Loaded at startup into bridge.asimov's rule atom.
+[]

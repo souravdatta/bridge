@@ -1,0 +1,4 @@
+;; Motoko routing rules.
+;; Each rule maps a pattern to a :route keyword and extracts named slots.
+;; Loaded at startup into bridge.motoko's rule atom.
+[]

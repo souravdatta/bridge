@@ -1,0 +1,5 @@
+;; Kafka mode classification patterns (~20-30 rules).
+;; Classifies mode: ponder / research / debate / connect / synthesise.
+;; Intentionally small — Kafka's domain is open-ended, LLM does the work.
+;; Loaded at startup into bridge.kafka's rule atom.
+[]

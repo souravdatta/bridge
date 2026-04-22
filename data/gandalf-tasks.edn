@@ -1,0 +1,4 @@
+;; Gandalf persistent task store.
+;; Each entry: {:id "..." :task "..." :scheduled-at "..." :status :pending}
+;; Written when jobs are created, updated when they fire or are cancelled.
+[]
