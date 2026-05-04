@@ -8,7 +8,7 @@
             [bridge.gandalf  :as gandalf]
             [bridge.asimov   :as asimov]
             [bridge.uhura    :as uhura]
-            [bridge.quorra   :as quorra]
+            [bridge.ghost   :as ghost]
             [clojure.string  :as str]
             [cheshire.core   :as json]))
 
@@ -63,7 +63,7 @@
    :gandalf gandalf/gandalf
    :asimov  asimov/asimov
    :uhura   uhura/uhura
-   :quorra  quorra/quorra})
+   :ghost  ghost/ghost})
 
 ;; ---------------------------------------------------------------------------
 ;; Active-agent stickiness.
@@ -75,7 +75,7 @@
 (defonce ^:private active-agent (atom :motoko))
 
 (def ^:private known-agents
-  #{:motoko :neo :gandalf :asimov :uhura :quorra})
+  #{:motoko :neo :gandalf :asimov :uhura :ghost})
 
 (def ^:private switch-messages
   {:motoko  "I have the bridge. What do you need?"
@@ -83,7 +83,7 @@
    :gandalf "Gandalf on duty. Calendar is ready."
    :asimov  "Asimov at the archives. What are we researching?"
    :uhura   "Uhura at comms. Speak."
-   :quorra  "Quorra here. Whatever you need — I'm on it."})
+   :ghost  "Ghost here. Whatever you need — I'm on it."})
 
 (defn- slash-command? [s]
   (and (string? s)
@@ -147,10 +147,10 @@
    :uhura   ["Uhura, open a channel."
              "Routing to Uhura. Mind the send guard."
              "Uhura — comms duty."]
-   :quorra  ["Quorra — they need you. Go."
-             "Passing to Quorra. She'll find a way."
-             "Quorra, take point. Bring them in."
-             "Routing to Quorra. She doesn't stop."]})
+   :ghost  ["Ghost — they need you. Go."
+             "Passing to Ghost. She'll find a way."
+             "Ghost, take point. Bring them in."
+             "Routing to Ghost. She doesn't stop."]})
 
 (defn- forward-message [agent-kw]
   (rand-nth (get forward-lines agent-kw
@@ -237,7 +237,7 @@ Agents (the ONLY valid values for \"route\"):
 " proto/roster-text "
 
 Field rules:
-  route  — MUST be one of: motoko, neo, gandalf, asimov, uhura, quorra.
+  route  — MUST be one of: motoko, neo, gandalf, asimov, uhura, ghost.
   intent — short category keyword (examples: code, schedule, story,
            research, comms, greetings, general).
   action — narrower kind inside that intent (examples: write, debug,
@@ -248,7 +248,7 @@ natural-language number forms the pattern engine could not parse
 (\"in two days\", \"three hours ago\", \"next week\", \"a fortnight\",
 \"tomorrow at noon\", \"this Friday\"). If the prompt reached you and
 it is about time, date, calendar, duration, or scheduling in any form,
-return \"route\": \"gandalf\". Do NOT send such prompts to quorra or
+return \"route\": \"gandalf\". Do NOT send such prompts to ghost or
 motoko.
 
 motoko handles ONLY simple greetings, small talk, and personal chit
@@ -257,10 +257,10 @@ roster line mentions them — the pattern layer handles the easy ones
 before reaching you; if they reached you, send them to gandalf.
 
 If the prompt does not clearly match any of neo / gandalf / asimov /
-uhura — route to quorra. Quorra is the generalist: open-ended
+uhura — route to ghost. Ghost is the generalist: open-ended
 conversation, brainstorming, planning, philosophy, creative ideation.
 Route long-form deep-research / multi-source synthesis requests to
-asimov, NOT quorra.
+asimov, NOT ghost.
 
 Return the JSON object and nothing else."))
 
@@ -292,7 +292,7 @@ Return the JSON object and nothing else."))
 (defn consult-omni
   "Called when pattern matching returns nil. Asks the LLM to classify the
   prompt and forwards to the chosen agent. On parse failure or unknown
-  route, falls through to Quorra. Takes a :request envelope, returns a
+  route, falls through to Ghost. Takes a :request envelope, returns a
   :reply envelope."
   [request]
   (println (rand-nth omni-log-lines))
@@ -304,9 +304,9 @@ Return the JSON object and nothing else."))
         (proto/forward request (:route decision)
                        :intent (:intent decision)
                        :action (:action decision)))
-      ;; Parse failed or unknown route -> Quorra as catch-all.
+      ;; Parse failed or unknown route -> Ghost as catch-all.
       (forward-to-agent
-        (proto/forward request :quorra
+        (proto/forward request :ghost
                        :intent :general
                        :action :help)))))
 

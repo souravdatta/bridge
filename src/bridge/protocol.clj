@@ -13,7 +13,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Shared agent roster — the bosses of Section 9. Both Motoko (for her
-;; routing classifier) and Quorra (for her suggest-an-agent mode) embed this
+;; routing classifier) and Ghost (for her suggest-an-agent mode) embed this
 ;; data in their LLM system prompts. Kept here to avoid a cross-dependency
 ;; between the two.
 ;; ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@
    {:key :gandalf :desc "scheduling, reminders, calendar, time/date queries, daily planning"}
    {:key :asimov  :desc "deep research, long-form investigation, synthesis, footnoted analysis"}
    {:key :uhura   :desc "communications: email, messages, reading / sending"}
-   {:key :quorra  :desc "generalist: conversation, brainstorming, planning, philosophy, creative ideation"}])
+   {:key :ghost  :desc "generalist: conversation, brainstorming, planning, philosophy, creative ideation"}])
 
 (def roster-text
   "String rendering of agent-roster — ready to embed in LLM system prompts."
@@ -57,7 +57,7 @@
 
 (def known-agents
   "Addressable principals. Includes :user and :system in addition to agents."
-  #{:user :system :motoko :neo :gandalf :asimov :uhura :quorra})
+  #{:user :system :motoko :neo :gandalf :asimov :uhura :ghost})
 
 ;; --- Envelope header specs -------------------------------------------------
 (s/def :msg/id          uuid?)

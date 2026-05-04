@@ -60,6 +60,7 @@
   [reply]
   (let [from (and (map? reply) (:msg/from reply))]
     (cond
+      (= from :ghost) "Motoko's ghost"
       (keyword? from) (-> from name clojure.string/capitalize)
       (string? from)  from
       :else           "Motoko")))

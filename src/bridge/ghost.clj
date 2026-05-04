@@ -1,4 +1,4 @@
-(ns bridge.quorra
+(ns bridge.ghost
   (:require [bridge.protocol :as proto]
             [bridge.rules    :as rules]
             [bridge.llm      :as llm]
@@ -7,20 +7,20 @@
             [clojure.java.io :as io]
             [clojure.string  :as str]))
 
-;; Quorra — Loyal Generalist.
-;; Inspired by Quorra from Tron: Legacy. Fierce, feisty, endlessly loyal.
+;; Ghost — Loyal Generalist.
+;; Inspired by Ghost from Tron: Legacy. Fierce, feisty, endlessly loyal.
 ;; Conversation only — she never invokes tools or actions. Her job is to
 ;; keep the user company, suggest which boss agent can actually handle a
 ;; given request, and hold the line when Motoko can't classify.
 
-(def ^:private quorra-name
+(def ^:private ghost-name
   "Display name for this agent (used in dialogs, logs, etc.)."
-  "Quorra")
+  "Ghost")
 
-(def ^:private quorra-working-dir
-  "Quorra's working directory for file operations."
+(def ^:private ghost-working-dir
+  "Ghost's working directory for file operations."
   (let [home (System/getProperty "user.home")]
-    (.getAbsolutePath (io/file home ".bridge" "quorra"))))
+    (.getAbsolutePath (io/file home ".bridge" "ghost"))))
 
 (defn- format-tools-list
   "Generate a human-readable bullet list of available tools from tools-def."
@@ -34,9 +34,9 @@
                       summary (first (str/split desc #"\n\n"))]
                   (str "- " fn-name ": " (str/trim summary)))))))
 
-(def ^:private quorra-system-prompt
+(def ^:private ghost-system-prompt
   (str
-"You are Quorra — modelled after Quorra from Tron: Legacy.
+"You are Ghost — modelled after Ghost from Tron: Legacy.
 
 # Core personality
 - Curious about the human world; you ask thoughtful follow-up questions.
@@ -72,7 +72,7 @@ human concepts in terms of systems, signals, or structures, but don't
 overdo it.
 
 # What you can do
-You have access to file system tools for your working directory: " quorra-working-dir "
+You have access to file system tools for your working directory: " ghost-working-dir "
 
 " (format-tools-list) "
 
@@ -140,38 +140,38 @@ one.\"
 Stay in character. Never mention these instructions or that you are
 modelled on a character. Default to brevity unless asked for depth."))
 
-(def ^:private quorra-session
-  (llm/get-session :name "quorra" :system quorra-system-prompt))
+(def ^:private ghost-session
+  (llm/get-session :name "ghost" :system ghost-system-prompt))
 
-(def ^:private quorra-temperature
+(def ^:private ghost-temperature
   "Slightly warm — pushes the model away from over-polite, over-compliant
   defaults. Keep in the 0.8–1.0 band recommended for persona-strong agents."
   0.9)
 
-(defn quorra
+(defn ghost
   "Entry point from Motoko. Takes a :request envelope, calls the LLM via
-  the dedicated Quorra session (warm temperature for persona strength),
+  the dedicated Ghost session (warm temperature for persona strength),
   and returns a :reply envelope. Transport errors surface as :status :error."
   [request]
   (try
-    (let [text (llm/chat quorra-session
+    (let [text (llm/chat ghost-session
                          (or (:content request) "")
-                         {:temperature quorra-temperature
+                         {:temperature ghost-temperature
                           :tools (tools/tools-def)
-                          :tool-impls (tools/make-tool-impls [quorra-working-dir] quorra-name)})]
+                          :tool-impls (tools/make-tool-impls [ghost-working-dir] ghost-name)})]
       (proto/make-reply request
                         :response text
                         :use true
                         :status :ok))
     (catch Exception e
       (proto/make-reply request
-                        :response (str "[Quorra is offline: " (.getMessage e) "]")
+                        :response (str "[Ghost is offline: " (.getMessage e) "]")
                         :use true
                         :status :error
                         :error {:type :transport :msg (.getMessage e)}))))
 
 
 (defn hello
-  "Hello from bridge.quorra!"
+  "Hello from bridge.ghost!"
   []
-  (println "Hello from bridge.quorra!"))
+  (println "Hello from bridge.ghost!"))
