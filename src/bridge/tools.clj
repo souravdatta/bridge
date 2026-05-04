@@ -448,6 +448,102 @@
 
 
 ;; ---------------------------------------------------------------------------
+;; Time / date tools
+;; ---------------------------------------------------------------------------
+
+(def ^:private iso-datetime-fmt
+  (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm:ssXXX"))
+
+(def ^:private iso-date-fmt
+  (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd"))
+
+(def ^:private weekday-fmt
+  (java.time.format.DateTimeFormatter/ofPattern "EEEE"))
+
+(defn- format-zoned [^java.time.ZonedDateTime zdt]
+  {:iso     (.format zdt iso-datetime-fmt)
+   :date    (.format zdt iso-date-fmt)
+   :weekday (.format zdt weekday-fmt)
+   :epoch   (.toEpochSecond zdt)})
+
+(defn- format-date [^java.time.LocalDate ld]
+  {:date    (.format ld iso-date-fmt)
+   :weekday (.format ld weekday-fmt)})
+
+(defn now
+  "Return the current local date and time as ISO-8601 with timezone offset,
+  plus the epoch second. Always call this tool when the user's request
+  depends on the current time; never guess or hard-code a value.
+
+  Returns a map:
+    :iso     – \"2026-05-04T14:32:18+05:30\"
+    :date    – \"2026-05-04\"
+    :weekday – \"Monday\"
+    :epoch   – 1746358338"
+  []
+  (with-logging "now" {}
+    (format-zoned (java.time.ZonedDateTime/now))))
+
+(defn today
+  "Return today's date as ISO-8601 (YYYY-MM-DD) plus the day of the week.
+  Always call this tool when the user's request depends on the current
+  date; never guess or hard-code a value.
+
+  Returns a map:
+    :date    – \"2026-05-04\"
+    :weekday – \"Monday\""
+  []
+  (with-logging "today" {}
+    (format-date (java.time.LocalDate/now))))
+
+(defn time-offset
+  "Return the date and time AMOUNT units from now. UNIT must be one of
+  \"seconds\", \"minutes\", or \"hours\". AMOUNT may be negative to look
+  backward. Use this for questions like \"3 hours from now\" or
+  \"45 minutes ago\".
+
+  Parameters
+    amount – integer (positive = future, negative = past).
+    unit   – one of \"seconds\", \"minutes\", \"hours\".
+
+  Returns a map: {:iso ... :date ... :weekday ... :epoch ...}"
+  [amount unit]
+  (with-logging "time-offset" {:amount amount :unit unit}
+    (let [n   (long amount)
+          now (java.time.ZonedDateTime/now)
+          zdt (case (str/lower-case (str unit))
+                "seconds" (.plusSeconds now n)
+                "minutes" (.plusMinutes now n)
+                "hours"   (.plusHours   now n)
+                (throw (ex-info (str "Unknown time unit: " unit)
+                                {:type :bad-unit :unit unit})))]
+      (format-zoned zdt))))
+
+(defn date-offset
+  "Return the date AMOUNT units from today. UNIT must be one of \"days\",
+  \"weeks\", or \"months\". AMOUNT may be negative to look backward.
+  Use this for questions like \"a fortnight from now\" (14 days) or
+  \"three weeks ago\".
+
+  Parameters
+    amount – integer (positive = future, negative = past).
+    unit   – one of \"days\", \"weeks\", \"months\".
+
+  Returns a map: {:date ... :weekday ...}"
+  [amount unit]
+  (with-logging "date-offset" {:amount amount :unit unit}
+    (let [n     (long amount)
+          today (java.time.LocalDate/now)
+          ld    (case (str/lower-case (str unit))
+                  "days"   (.plusDays   today n)
+                  "weeks"  (.plusWeeks  today n)
+                  "months" (.plusMonths today n)
+                  (throw (ex-info (str "Unknown date unit: " unit)
+                                  {:type :bad-unit :unit unit})))]
+      (format-date ld))))
+
+
+;; ---------------------------------------------------------------------------
 ;; Tool introspection for LLM
 ;; ---------------------------------------------------------------------------
 
@@ -474,6 +570,10 @@
                   :description "The main question to ask the user"}
     details      {:type "string"
                   :description "Additional context, instructions, or options (optional)"}
+    amount       {:type "integer"
+                  :description "Number of units to offset (negative for past, positive for future)"}
+    unit         {:type "string"
+                  :description "Unit of offset. Time: seconds|minutes|hours. Date: days|weeks|months."}
     ;; default
     {:type "string"}))
 
@@ -555,4 +655,8 @@
                           (if (:prefix args)
                             (create-temp-file (:prefix args))
                             (create-temp-file))))
-   "ask-user"        (fn [args] (ask-user (:question args) (:details args) agent-name))})
+   "ask-user"        (fn [args] (ask-user (:question args) (:details args) agent-name))
+   "now"             (fn [_]    (now))
+   "today"           (fn [_]    (today))
+   "time-offset"     (fn [args] (time-offset (:amount args) (:unit args)))
+   "date-offset"     (fn [args] (date-offset (:amount args) (:unit args)))})

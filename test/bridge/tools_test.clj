@@ -642,7 +642,11 @@
     (is (contains? names "rename-dir"))
     (is (contains? names "create-temp-file"))
     ;; ask-user is also present but not tested due to interactive UI
-    (is (contains? names "ask-user"))))
+    (is (contains? names "ask-user"))
+    (is (contains? names "now"))
+    (is (contains? names "today"))
+    (is (contains? names "time-offset"))
+    (is (contains? names "date-offset"))))
 
 (deftest tools-def-excludes-itself
   "tools-def should not include itself in the results."
@@ -709,3 +713,109 @@
       (tools/create-dirs wd "nested/path/here")
       (is (.exists (io/file tmp "nested" "path" "here")))
       (is (.isDirectory (io/file tmp "nested" "path" "here"))))))
+
+
+;; ---------------------------------------------------------------------------
+;; Time / date tools
+;; ---------------------------------------------------------------------------
+
+(def ^:private iso-datetime-re
+  #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+\-]\d{2}:\d{2}$")
+
+(def ^:private iso-date-re
+  #"^\d{4}-\d{2}-\d{2}$")
+
+(def ^:private weekdays
+  #{"Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday" "Sunday"})
+
+(deftest now-returns-iso-datetime-and-epoch
+  (let [r (tools/now)]
+    (is (re-matches iso-datetime-re (:iso r)))
+    (is (re-matches iso-date-re     (:date r)))
+    (is (contains? weekdays         (:weekday r)))
+    (is (integer? (:epoch r)))
+    (is (pos? (:epoch r)))))
+
+(deftest now-epoch-near-system-time
+  (let [r       (tools/now)
+        wall    (quot (System/currentTimeMillis) 1000)
+        delta   (Math/abs (- wall (long (:epoch r))))]
+    (is (< delta 5) (str "epoch off by " delta " seconds"))))
+
+(deftest today-returns-date-and-weekday
+  (let [r (tools/today)]
+    (is (re-matches iso-date-re (:date r)))
+    (is (contains? weekdays     (:weekday r)))))
+
+(deftest time-offset-future-and-past
+  (let [base    (tools/now)
+        future  (tools/time-offset 60 "minutes")
+        past    (tools/time-offset -1 "hours")]
+    (is (re-matches iso-datetime-re (:iso future)))
+    (is (re-matches iso-datetime-re (:iso past)))
+    (is (> (:epoch future) (:epoch base)))
+    (is (< (:epoch past)   (:epoch base)))
+    (is (<= 3540 (- (:epoch future) (:epoch base)) 3660))
+    (is (<= 3540 (- (:epoch base)   (:epoch past))  3660))))
+
+(deftest time-offset-supports-all-units
+  (doseq [u ["seconds" "minutes" "hours" "SECONDS" "Hours"]]
+    (is (re-matches iso-datetime-re (:iso (tools/time-offset 1 u))))))
+
+(deftest time-offset-rejects-unknown-unit
+  (is (thrown? clojure.lang.ExceptionInfo
+               (tools/time-offset 1 "centuries"))))
+
+(deftest date-offset-future-and-past
+  (let [today  (tools/today)
+        ahead  (tools/date-offset 14 "days")
+        behind (tools/date-offset -3 "weeks")
+        td     (java.time.LocalDate/parse (:date today))
+        ad     (java.time.LocalDate/parse (:date ahead))
+        bd     (java.time.LocalDate/parse (:date behind))]
+    (is (re-matches iso-date-re (:date ahead)))
+    (is (re-matches iso-date-re (:date behind)))
+    (is (= 14  (.until td ad java.time.temporal.ChronoUnit/DAYS)))
+    (is (= -21 (.until td bd java.time.temporal.ChronoUnit/DAYS)))
+    (is (contains? weekdays (:weekday ahead)))
+    (is (contains? weekdays (:weekday behind)))))
+
+(deftest date-offset-supports-all-units
+  (doseq [u ["days" "weeks" "months" "DAYS" "Months"]]
+    (is (re-matches iso-date-re (:date (tools/date-offset 1 u))))))
+
+(deftest date-offset-rejects-unknown-unit
+  (is (thrown? clojure.lang.ExceptionInfo
+               (tools/date-offset 1 "decades"))))
+
+(deftest time-and-date-tools-have-no-required-params
+  "now and today take no params; their JSON Schema must reflect that."
+  (let [defs (tools/tools-def)
+        spec-of (fn [n] (first (filter #(= n (get-in % [:function :name])) defs)))]
+    (doseq [n ["now" "today"]]
+      (let [params (get-in (spec-of n) [:function :parameters])]
+        (is (= [] (:required params)) (str n " required"))
+        (is (= {} (:properties params)) (str n " properties"))))))
+
+(deftest offset-tools-declare-amount-and-unit
+  (let [defs (tools/tools-def)
+        spec-of (fn [n] (first (filter #(= n (get-in % [:function :name])) defs)))]
+    (doseq [n ["time-offset" "date-offset"]]
+      (let [params (get-in (spec-of n) [:function :parameters])]
+        (is (contains? (:properties params) "amount"))
+        (is (contains? (:properties params) "unit"))
+        (is (= "integer" (get-in params [:properties "amount" :type])))
+        (is (= #{"amount" "unit"} (set (:required params))))))))
+
+(deftest tool-impls-include-time-and-date
+  (let [impls (tools/make-tool-impls ["/tmp"] "Test")]
+    (is (fn? (get impls "now")))
+    (is (fn? (get impls "today")))
+    (is (fn? (get impls "time-offset")))
+    (is (fn? (get impls "date-offset")))
+    (is (re-matches iso-datetime-re (:iso ((get impls "now") {}))))
+    (is (re-matches iso-date-re     (:date ((get impls "today") {}))))
+    (is (re-matches iso-datetime-re
+                    (:iso ((get impls "time-offset") {:amount 5 :unit "minutes"}))))
+    (is (re-matches iso-date-re
+                    (:date ((get impls "date-offset") {:amount 1 :unit "weeks"}))))))
