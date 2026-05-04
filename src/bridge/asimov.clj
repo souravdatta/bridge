@@ -4,6 +4,10 @@
             [bridge.llm      :as llm]
             [bridge.memory   :as memory]))
 
+(def ^:private asimov-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Asimov")
+
 ;; Asimov — Deep Research Boss.
 ;; Long-form investigation, synthesis, footnoted analysis. Takes the heavy
 ;; research lifting; Quorra handles casual brainstorming and light ideation.

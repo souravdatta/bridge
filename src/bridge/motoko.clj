@@ -12,6 +12,10 @@
             [clojure.string  :as str]
             [cheshire.core   :as json]))
 
+(def ^:private motoko-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Motoko")
+
 ;; Motoko — Master Orchestrator.
 ;;
 ;; Dispatch flow:

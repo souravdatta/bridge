@@ -13,6 +13,10 @@
 ;; keep the user company, suggest which boss agent can actually handle a
 ;; given request, and hold the line when Motoko can't classify.
 
+(def ^:private quorra-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Quorra")
+
 (def ^:private quorra-working-dir
   "Quorra's working directory for file operations."
   (let [home (System/getProperty "user.home")]
@@ -154,7 +158,7 @@ modelled on a character. Default to brevity unless asked for depth."))
                          (or (:content request) "")
                          {:temperature quorra-temperature
                           :tools (tools/tools-def)
-                          :tool-impls (tools/make-tool-impls [quorra-working-dir])})]
+                          :tool-impls (tools/make-tool-impls [quorra-working-dir] quorra-name)})]
       (proto/make-reply request
                         :response text
                         :use true

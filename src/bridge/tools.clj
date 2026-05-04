@@ -370,25 +370,30 @@
   Opens a modal dialog window that blocks until the user provides an answer.
 
   Parameters
-    question – the main question to ask (displayed as a title/label).
-    details  – additional context, instructions, or options (optional, displayed
-               in a scrollable text area). Pass nil or empty string to omit.
+    question   – the main question to ask (displayed as a title/label).
+    details    – additional context, instructions, or options (optional,
+                 displayed in a scrollable text area). Pass nil or empty
+                 string to omit.
+    agent-name – name of the asking agent, shown in the dialog title
+                 (optional, defaults to \"Agent\").
 
   Returns the user's text response as a string, or nil if the dialog was closed
   without submitting an answer.
 
   Example
-    (ask-user \"What is your name?\" \"Please enter your full name.\")
-    (ask-user \"Confirm deletion?\" \"Options: yes, no, cancel\")"
+    (ask-user \"What is your name?\" \"Please enter your full name.\" \"Quorra\")"
   ([question]
-   (ask-user question nil))
+   (ask-user question nil nil))
   ([question details]
-   (with-logging "ask-user" {:question question :has-details (some? details)}
-     (let [result (promise)]
+   (ask-user question details nil))
+  ([question details agent-name]
+   (with-logging "ask-user" {:question question :has-details (some? details) :agent-name agent-name}
+     (let [result (promise)
+           title (str (or agent-name "Agent") " — Question")]
        (SwingUtilities/invokeLater
         (fn []
           (let [dialog       (doto (JDialog.)
-                               (.setTitle "Agent Question")
+                               (.setTitle title)
                                (.setModal true))
                 question-lbl (JLabel. (str "<html><b>" question "</b></html>"))
                 details-area (doto (JTextArea. (or details ""))
@@ -520,18 +525,22 @@
 
 (defn make-tool-impls
   "Build a map of tool implementation functions for use with bridge.llm/chat.
-  
+
   Each tool function in this namespace that accepts a working-dirs parameter
-  is wrapped with the provided WORKING-DIRS value. Tools without working-dirs
-  (like create-temp-file, ask-user) are wrapped as-is.
-  
+  is wrapped with the provided WORKING-DIRS value. The ask-user tool is
+  wrapped with AGENT-NAME so the dialog title identifies which agent is
+  asking. Tools without working-dirs (like create-temp-file) are wrapped
+  as-is.
+
   Parameters
     working-dirs – collection of allowed root directories (absolute path strings)
                    to pass to each tool implementation.
-  
+    agent-name   – name of the agent (e.g. \"Quorra\"), used as the title of
+                   the ask-user dialog so the user knows who is asking.
+
   Returns a map of {\"tool-name\" (fn [args-map] result)} suitable for passing
   as :tool-impls to bridge.llm/chat."
-  [working-dirs]
+  [working-dirs agent-name]
   {"read-file"       (fn [args] (read-file working-dirs (:path args)))
    "list-dir"        (fn [args] (list-dir working-dirs (:path args)))
    "write-file"      (fn [args] (write-file working-dirs (:path args) (:content args)))
@@ -540,10 +549,10 @@
    "delete-dir"      (fn [args] (delete-dir working-dirs (:path args)))
    "rename-file"     (fn [args] (rename-file working-dirs (:old-path args) (:new-path args)))
    "rename-dir"      (fn [args] (rename-dir working-dirs (:old-path args) (:new-path args)))
-   "create-temp-file" (fn [args] 
+   "create-temp-file" (fn [args]
                         (if (and (:prefix args) (:suffix args))
                           (create-temp-file (:prefix args) (:suffix args))
                           (if (:prefix args)
                             (create-temp-file (:prefix args))
                             (create-temp-file))))
-   "ask-user"        (fn [args] (ask-user (:question args) (:details args)))})
+   "ask-user"        (fn [args] (ask-user (:question args) (:details args) agent-name))})

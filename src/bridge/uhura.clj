@@ -4,6 +4,10 @@
             [bridge.llm      :as llm]
             [bridge.memory   :as memory]))
 
+(def ^:private uhura-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Uhura")
+
 ;; Uhura — Communicator Boss.
 ;; Large pattern corpus (200+ rules in resources/patterns/uhura.edn) handles
 ;; all communication mechanics: read/write, email/WhatsApp, to/from whom.

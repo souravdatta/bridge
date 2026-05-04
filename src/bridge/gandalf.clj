@@ -3,6 +3,10 @@
             [bridge.rules    :as rules]
             [bridge.memory   :as memory]))
 
+(def ^:private gandalf-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Gandalf")
+
 ;; Gandalf — Daily Planner Boss.
 ;; No rules engine — plain cond/case dispatch on slots extracted by Motoko's
 ;; pattern match. Quartzite handles job scheduling. Natty parses natural

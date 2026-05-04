@@ -4,6 +4,10 @@
             [bridge.llm      :as llm]
             [bridge.memory   :as memory]))
 
+(def ^:private neo-name
+  "Display name for this agent (used in dialogs, logs, etc.)."
+  "Neo")
+
 ;; Neo — Coding Boss.
 ;; Pattern engine classifies task type (generate / fix / refactor / explain / run-tests)
 ;; and extracts language + description. LLM does the actual work.
