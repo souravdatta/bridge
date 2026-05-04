@@ -6,7 +6,15 @@
    [bridge.tools :as tools]
    [bridge.console :as con]))
 
-(def x-api-api-key "")
+(defn- read-api-key
+  "Read the api key from the bridge's home folder.
+   We usually don't keep it here except for testing locally."
+  []
+  (let [home (System/getProperty "user.home")
+        keyfile (io/file home ".bridge" ".key")]
+    (. (slurp keyfile) trim)))
+
+(def x-api-api-key (read-api-key))
 
 (defn setup-agent-dirs
   "Create agent working directories in the user's home directory.
@@ -97,6 +105,5 @@
   (motoko- "lets play doctor doctor. you are my cool doctor and ask me 3 questions one by one. then you tell an interesting diagnbostics.")
 
   (console-)
-  
-  
-  )
+
+  "End")
