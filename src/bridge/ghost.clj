@@ -143,6 +143,13 @@ modelled on a character. Default to brevity unless asked for depth."))
 (def ^:private ghost-session
   (llm/get-session :name "ghost" :system ghost-system-prompt))
 
+(defn record-context!
+  "Mirror a (user, assistant) exchange into Ghost's chat history without
+  hitting the LLM. Lets Motoko's pattern-matched replies inform later
+  fallback turns that do reach Ghost."
+  [user-text assistant-text]
+  (llm/record-turn! ghost-session user-text assistant-text))
+
 (def ^:private ghost-temperature
   "Slightly warm — pushes the model away from over-polite, over-compliant
   defaults. Keep in the 0.8–1.0 band recommended for persona-strong agents."

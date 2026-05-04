@@ -311,6 +311,28 @@ Return the JSON object and nothing else."))
                        :action :help)))))
 
 
+(defn- response-text
+  "Coerce a reply's :response (string or vector of strings) to a single
+  string for context-recording purposes. Returns nil if not present."
+  [reply]
+  (let [r (:response reply)]
+    (cond
+      (string? r) r
+      (sequential? r) (str/join "\n" (map str r))
+      :else nil)))
+
+(defn- record-motoko-turn!
+  "Mirror a user→Motoko exchange into Ghost's chat history. Skips meta
+  replies and empty content."
+  [request reply]
+  (let [user-text (:content request)
+        asst-text (response-text reply)]
+    (when (and (= :motoko (:msg/from reply))
+               (not= :meta (:intent reply))
+               (string? user-text) (not= "" user-text)
+               (string? asst-text) (not= "" asst-text))
+      (ghost/record-context! user-text asst-text))))
+
 (defn- handle-classification
   "Convert a pattern-match classification map into the appropriate envelope:
    - route :motoko with :followup  -> reply envelope, apply-followups resolves.
@@ -322,23 +344,27 @@ Return the JSON object and nothing else."))
       (and (= target :motoko)
            (seq (:followup classification))
            (nil? (:response classification)))
-      (apply-followups
-        (proto/make-reply request
-                          :from :motoko
-                          :response nil
-                          :use false
-                          :followup (:followup classification)
-                          :intent (:intent classification)
-                          :action (:action classification)))
+      (let [reply (apply-followups
+                    (proto/make-reply request
+                                      :from :motoko
+                                      :response nil
+                                      :use false
+                                      :followup (:followup classification)
+                                      :intent (:intent classification)
+                                      :action (:action classification)))]
+        (record-motoko-turn! request reply)
+        reply)
 
       (= target :motoko)
-      (proto/make-reply request
-                        :from :motoko
-                        :response (:response classification)
-                        :use (get classification :use true)
-                        :followup (:followup classification [])
-                        :intent (:intent classification)
-                        :action (:action classification))
+      (let [reply (proto/make-reply request
+                                    :from :motoko
+                                    :response (:response classification)
+                                    :use (get classification :use true)
+                                    :followup (:followup classification [])
+                                    :intent (:intent classification)
+                                    :action (:action classification))]
+        (record-motoko-turn! request reply)
+        reply)
 
       :else
       (forward-to-agent

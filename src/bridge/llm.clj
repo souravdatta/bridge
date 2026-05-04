@@ -161,6 +161,25 @@
   (swap! registry dissoc agent-name)
   nil)
 
+(declare ^:private trim-history)
+
+(defn record-turn!
+  "Append a user→assistant exchange to SESSION's history without calling
+  the API. Used to mirror non-LLM turns (e.g. Motoko's pattern-matched
+  replies) into another agent's chat context. No-ops on blank inputs."
+  [session user-text assistant-text]
+  (when (and session
+             (string? user-text) (not= "" user-text)
+             (string? assistant-text) (not= "" assistant-text))
+    (locking (:lock session)
+      (swap! (:messages session)
+             (fn [m]
+               (-> m
+                   (conj (user-msg user-text))
+                   (conj (asst-msg assistant-text))
+                   trim-history)))))
+  nil)
+
 
 ;; ---------------------------------------------------------------------------
 ;; History trimming
