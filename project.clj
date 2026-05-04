@@ -6,4 +6,6 @@
   :dependencies [[org.clojure/clojure "1.12.2"]
                  [clj-http "3.13.0"]
                  [cheshire "5.13.0"]]
+  :main bridge.core
+  :aot [bridge.core]
   :repl-options {:init-ns bridge.core})

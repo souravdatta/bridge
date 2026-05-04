@@ -8,10 +8,9 @@
   LLM calls run on a background thread so the UI stays responsive."
   (:require [bridge.motoko :as motoko]
             [bridge.llm    :as llm]
-            [cheshire.core :as json]
-            [clojure.string :as str])
+            [cheshire.core :as json])
   (:import [javax.swing JFrame JPanel JTextArea JTextField JButton JScrollPane
-                        JSplitPane SwingUtilities BorderFactory]
+            SwingUtilities BorderFactory]
            [java.awt BorderLayout Dimension Font]
            [java.awt.event ActionListener]))
 
@@ -61,7 +60,7 @@
   [reply]
   (let [from (and (map? reply) (:msg/from reply))]
     (cond
-      (keyword? from) (-> from name str/capitalize)
+      (keyword? from) (-> from name clojure.string/capitalize)
       (string? from)  from
       :else           "Motoko")))
 
@@ -87,14 +86,8 @@
   components the submit handler needs."
   []
   (let [chat-area  (build-text-area false)
-        json-area  (build-text-area true)
         chat-scroll (doto (JScrollPane. chat-area)
                       (.setBorder (BorderFactory/createTitledBorder "Conversation")))
-        json-scroll (doto (JScrollPane. json-area)
-                      (.setBorder (BorderFactory/createTitledBorder "Reply envelope (JSON)")))
-        split       (doto (JSplitPane. JSplitPane/HORIZONTAL_SPLIT chat-scroll json-scroll)
-                      (.setResizeWeight 0.6)
-                      (.setDividerLocation 600))
         input-field (doto (JTextField.)
                       (.setFont (Font. Font/SANS_SERIF Font/PLAIN 13)))
         send-btn    (JButton. "Send")
@@ -103,7 +96,7 @@
                       (.add input-field BorderLayout/CENTER)
                       (.add send-btn    BorderLayout/EAST))
         root        (doto (JPanel. (BorderLayout.))
-                      (.add split  BorderLayout/CENTER)
+                      (.add chat-scroll  BorderLayout/CENTER)
                       (.add bottom BorderLayout/SOUTH))
         frame       (doto (JFrame. "Bridge Console — Section 9")
                       (.setContentPane root)
@@ -112,10 +105,8 @@
                       (.setLocationRelativeTo nil))]
     {:frame       frame
      :chat-area   chat-area
-     :json-area   json-area
      :input-field input-field
-     :send-btn    send-btn
-     :split       split}))
+     :send-btn    send-btn}))
 
 
 ;; ---------------------------------------------------------------------------
@@ -150,7 +141,6 @@
           (SwingUtilities/invokeLater
            (fn []
              (append! chat-area (str (agent-label reply) ": " (reply-text reply) "\n\n"))
-             (set-text! json-area (pretty-json reply))
              (.setEnabled send-btn true)
              (.setEnabled input-field true)
              (.requestFocusInWindow input-field))))))))
