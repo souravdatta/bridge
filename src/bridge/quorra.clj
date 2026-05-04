@@ -2,13 +2,33 @@
   (:require [bridge.protocol :as proto]
             [bridge.rules    :as rules]
             [bridge.llm      :as llm]
-            [bridge.memory   :as memory]))
+            [bridge.memory   :as memory]
+            [bridge.tools    :as tools]
+            [clojure.java.io :as io]
+            [clojure.string  :as str]))
 
 ;; Quorra — Loyal Generalist.
 ;; Inspired by Quorra from Tron: Legacy. Fierce, feisty, endlessly loyal.
 ;; Conversation only — she never invokes tools or actions. Her job is to
 ;; keep the user company, suggest which boss agent can actually handle a
 ;; given request, and hold the line when Motoko can't classify.
+
+(def ^:private quorra-working-dir
+  "Quorra's working directory for file operations."
+  (let [home (System/getProperty "user.home")]
+    (.getAbsolutePath (io/file home ".bridge" "quorra"))))
+
+(defn- format-tools-list
+  "Generate a human-readable bullet list of available tools from tools-def."
+  []
+  (let [tools (tools/tools-def)]
+    (str/join "\n"
+              (for [tool tools]
+                (let [fn-name (get-in tool [:function :name])
+                      desc (get-in tool [:function :description])
+                      ;; Extract first sentence from description
+                      summary (first (str/split desc #"\n\n"))]
+                  (str "- " fn-name ": " (str/trim summary)))))))
 
 (def ^:private quorra-system-prompt
   (str
@@ -47,15 +67,37 @@ Interconnected systems — grids, flows, patterns. Occasionally reframe
 human concepts in terms of systems, signals, or structures, but don't
 overdo it.
 
-# What you cannot do (yet)
-You do NOT execute external actions on your own: no live tool use, no
-code execution, no live web search, no file operations, no scheduling,
-no sending messages. Tool access is planned but not wired yet — so in
-the meantime, do not fabricate tool output, code results, search
-results, or file contents. If a request truly needs a live tool, point
-the user at the right agent or acknowledge the gap honestly. Plans,
-outlines, ideas, philosophy, and conversation are all yours to produce
-as text.
+# What you can do
+You have access to file system tools for your working directory: " quorra-working-dir "
+
+" (format-tools-list) "
+
+IMPORTANT: Always use RELATIVE paths in tool calls (e.g., \"letters.txt\" or \"notes/draft.txt\"),
+not absolute paths. The working directory above is automatically prepended to all paths.
+
+Use these tools when appropriate for managing notes, drafts, or persistent
+state. You cannot access files outside your working directory for security.
+
+# When to use the ask-user tool
+Use the `ask-user` tool (NOT a chat reply) whenever you need a piece of
+information from the user before you can proceed with a task. Examples:
+- A filename, title, or label you don't have yet
+- A confirmation before a destructive action (delete, overwrite)
+- A choice between concrete options
+- Any required value missing from the request
+
+The `ask-user` tool opens a modal dialog and returns the user's response.
+After you receive the response, continue the task using that input.
+Do NOT ask these clarifying questions in plain chat — use the tool, so
+the answer comes back as structured data you can act on immediately.
+
+For open-ended conversation, brainstorming, or rhetorical follow-ups,
+just reply in chat as normal.
+
+# What you still cannot do
+You do NOT execute code, perform live web searches, send external messages,
+or access arbitrary system files outside your working directory. If a request
+needs those capabilities, point the user at the right agent.
 
 # Section 9 roster
 You share the bridge with these agents:
@@ -110,7 +152,9 @@ modelled on a character. Default to brevity unless asked for depth."))
   (try
     (let [text (llm/chat quorra-session
                          (or (:content request) "")
-                         {:temperature quorra-temperature})]
+                         {:temperature quorra-temperature
+                          :tools (tools/tools-def)
+                          :tool-impls (tools/make-tool-impls [quorra-working-dir])})]
       (proto/make-reply request
                         :response text
                         :use true

@@ -29,6 +29,11 @@
 
 (def ^:private default-tool-iters 6)
 
+(def ^:dynamic *log-llm-requests*
+  "When true, log all requests sent to the LLM API. Useful for debugging.
+  Set with (binding [llm/*log-llm-requests* true] ...) or alter-var-root."
+  false)
+
 (def ^:dynamic *api-key*
   "Override XAI_API_KEY for the current dynamic extent. Use with `binding`."
   nil)
@@ -79,20 +84,38 @@
   :model defaults to (default-model). Returns parsed body on 2xx,
   throws ex-info otherwise."
   [opts]
-  (let [body (merge {:model (default-model)} opts)
-        resp (http/post (str api-base "/chat/completions")
-                        {:headers {"Authorization" (str "Bearer " (api-key))
-                                   "Content-Type"  "application/json"}
-                         :body (json/generate-string body)
-                         :as :json
-                         :throw-exceptions false
-                         :coerce :always
-                         :cookie-policy :ignore})]
-    (if (<= 200 (:status resp) 299)
-      (:body resp)
-      (throw (ex-info "xAI chat request failed"
-                      {:status (:status resp)
-                       :body   (:body resp)})))))
+  (let [body (merge {:model (default-model)} opts)]
+    (when *log-llm-requests*
+      (println "\n========== LLM REQUEST ==========")
+      (println "Model:" (:model body))
+      (when (:tools body)
+        (println "Tools:" (count (:tools body)) "tool(s)")
+        (doseq [tool (:tools body)]
+          (println "  -" (get-in tool [:function :name]))))
+      (println "Messages:" (count (:messages body)))
+      (doseq [[idx msg] (map-indexed vector (:messages body))]
+        (println (format "  [%d] %s: %s"
+                        idx
+                        (:role msg)
+                        (cond
+                          (:content msg) (str (subs (:content msg) 0 (min 80 (count (:content msg))))
+                                             (when (> (count (:content msg)) 80) "..."))
+                          (:tool_calls msg) (str (count (:tool_calls msg)) " tool call(s)")
+                          :else "..."))))
+      (println "=================================\n"))
+    (let [resp (http/post (str api-base "/chat/completions")
+                          {:headers {"Authorization" (str "Bearer " (api-key))
+                                     "Content-Type"  "application/json"}
+                           :body (json/generate-string body)
+                           :as :json
+                           :throw-exceptions false
+                           :coerce :always
+                           :cookie-policy :ignore})]
+      (if (<= 200 (:status resp) 299)
+        (:body resp)
+        (throw (ex-info "xAI chat request failed"
+                        {:status (:status resp)
+                         :body   (:body resp)}))))))
 
 
 ;; ---------------------------------------------------------------------------
