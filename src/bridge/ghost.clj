@@ -1,11 +1,8 @@
 (ns bridge.ghost
   (:require [bridge.protocol :as proto]
-            [bridge.rules    :as rules]
             [bridge.llm      :as llm]
-            [bridge.memory   :as memory]
             [bridge.tools    :as tools]
-            [clojure.java.io :as io]
-            [clojure.string  :as str]))
+            [clojure.java.io :as io]))
 
 ;; Ghost — Loyal Generalist.
 ;; Inspired by Ghost from Tron: Legacy. Fierce, feisty, endlessly loyal.
@@ -21,18 +18,6 @@
   "Ghost's working directory for file operations."
   (let [home (System/getProperty "user.home")]
     (.getAbsolutePath (io/file home ".bridge" "ghost"))))
-
-(defn- format-tools-list
-  "Generate a human-readable bullet list of available tools from tools-def."
-  []
-  (let [tools (tools/tools-def)]
-    (str/join "\n"
-              (for [tool tools]
-                (let [fn-name (get-in tool [:function :name])
-                      desc (get-in tool [:function :description])
-                      ;; Extract first sentence from description
-                      summary (first (str/split desc #"\n\n"))]
-                  (str "- " fn-name ": " (str/trim summary)))))))
 
 (def ^:private ghost-system-prompt
   (str
@@ -70,7 +55,7 @@ You have working tools. Use them. Never guess values you can compute.
 
 File system (scoped to " ghost-working-dir "):
 
-" (format-tools-list) "
+" (tools/format-tools-list) "
 
 Always use RELATIVE paths in file tool calls (e.g. \"notes/draft.txt\").
 The working directory is prepended automatically. You cannot reach

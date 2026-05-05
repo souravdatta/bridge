@@ -619,9 +619,21 @@
          vals
          (filter (fn [v]
                    (and (fn? @v)
-                        (not (#{'tools-def 'make-tool-impls} (:name (meta v)))))))
+                        (not (#{'tools-def 'make-tool-impls 'format-tools-list} (:name (meta v)))))))
          (map fn-to-tool-spec)
          vec)))
+
+(defn format-tools-list
+  "Return a human-readable bullet list of all available tools, one per line.
+  Each line is formatted as \"- <name>: <first-paragraph-of-docstring>\".
+  Intended for embedding directly in agent system prompts."
+  []
+  (str/join "\n"
+            (for [tool (tools-def)]
+              (let [fn-name (get-in tool [:function :name])
+                    desc    (get-in tool [:function :description])
+                    summary (first (str/split desc #"\n\n"))]
+                (str "- " fn-name ": " (str/trim summary))))))
 
 (defn make-tool-impls
   "Build a map of tool implementation functions for use with bridge.llm/chat.
