@@ -3,7 +3,6 @@
             [bridge.llm         :as llm]
             [bridge.tools       :as tools]
             [clojure.java.io    :as io]
-            [clojure.java.shell :as shell]
             [clojure.string     :as str]))
 
 (def ^:private neo-name
@@ -58,8 +57,12 @@
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
    (ensure-home-dir!)
-   (let [{:keys [exit out err]} (shell/sh "bash" "-c" command :dir neo-home-dir)]
-     (str "Exit: " exit "\n---stdout---\n" out "\n---stderr---\n" err))))
+   (let [proc (-> (ProcessBuilder. ["bash" "-c" command])
+                  (.directory (io/file neo-home-dir))
+                  (.inheritIO)
+                  (.start))
+         exit (.waitFor proc)]
+     (str "Exit: " exit " [output written to terminal]"))))
 
 (defn run-powershell
   "Execute COMMAND in PowerShell with Neo's home directory as the working
@@ -78,8 +81,12 @@
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
    (ensure-home-dir!)
-   (let [{:keys [exit out err]} (shell/sh "powershell" "-Command" command :dir neo-home-dir)]
-     (str "Exit: " exit "\n---stdout---\n" out "\n---stderr---\n" err))))
+   (let [proc (-> (ProcessBuilder. ["powershell" "-Command" command])
+                  (.directory (io/file neo-home-dir))
+                  (.inheritIO)
+                  (.start))
+         exit (.waitFor proc)]
+     (str "Exit: " exit " [output written to terminal]"))))
 
 (def ^:private neo-exec-tool-specs
   [{:type "function"

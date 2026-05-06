@@ -24,11 +24,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str])
   (:import [java.nio.file Path Paths]
-           [java.io File]
-           [javax.swing JFrame JDialog JPanel JLabel JTextArea JTextField JButton
-                        JScrollPane SwingUtilities BoxLayout Box]
-           [java.awt BorderLayout Dimension FlowLayout]
-           [java.awt.event ActionListener WindowAdapter]))
+           [java.io File]))
 
 
 ;; ---------------------------------------------------------------------------
@@ -366,19 +362,18 @@
 
 
 (defn ask-user
-  "Ask the user a question via a Swing dialog and return their response.
-  Opens a modal dialog window that blocks until the user provides an answer.
+  "Ask the user a question via the console and return their response.
+  Prints the question (and optional details) to stdout, then reads one line
+  from stdin. Breaks any active ANSI gray tint so the prompt is clearly visible.
 
   Parameters
-    question   – the main question to ask (displayed as a title/label).
-    details    – additional context, instructions, or options (optional,
-                 displayed in a scrollable text area). Pass nil or empty
+    question   – the main question to ask.
+    details    – additional context or options (optional). Pass nil or empty
                  string to omit.
-    agent-name – name of the asking agent, shown in the dialog title
+    agent-name – name of the asking agent, shown as a label
                  (optional, defaults to \"Agent\").
 
-  Returns the user's text response as a string, or nil if the dialog was closed
-  without submitting an answer.
+  Returns the user's text response as a string, or nil on EOF.
 
   Example
     (ask-user \"What is your name?\" \"Please enter your full name.\" \"Quorra\")"
@@ -388,63 +383,17 @@
    (ask-user question details nil))
   ([question details agent-name]
    (with-logging "ask-user" {:question question :has-details (some? details) :agent-name agent-name}
-     (let [result (promise)
-           title (str (or agent-name "Agent") " — Question")]
-       (SwingUtilities/invokeLater
-        (fn []
-          (let [dialog       (doto (JDialog.)
-                               (.setTitle title)
-                               (.setModal true))
-                question-lbl (JLabel. (str "<html><b>" question "</b></html>"))
-                details-area (doto (JTextArea. (or details ""))
-                               (.setEditable false)
-                               (.setLineWrap true)
-                               (.setWrapStyleWord true)
-                               (.setRows 4))
-                details-scroll (doto (JScrollPane. details-area)
-                                 (.setPreferredSize (Dimension. 450 80)))
-                input-field  (JTextField. 30)
-                submit-btn   (JButton. "Submit")
-                content      (doto (JPanel.)
-                               (.setBorder (javax.swing.BorderFactory/createEmptyBorder 10 10 10 10)))
-                submit!      (fn []
-                               (deliver result (.getText input-field))
-                               (.dispose dialog))]
-            (.setLayout content (BoxLayout. content BoxLayout/Y_AXIS))
-            (doto question-lbl
-              (.setAlignmentX java.awt.Component/LEFT_ALIGNMENT))
-            (doto details-scroll
-              (.setAlignmentX java.awt.Component/LEFT_ALIGNMENT))
-            (doto input-field
-              (.setAlignmentX java.awt.Component/LEFT_ALIGNMENT)
-              (.setMaximumSize (Dimension. Integer/MAX_VALUE 28)))
-            (doto submit-btn
-              (.setAlignmentX java.awt.Component/LEFT_ALIGNMENT)
-              (.addActionListener
-               (reify ActionListener
-                 (actionPerformed [_ _] (submit!)))))
-            (.addActionListener input-field
-                                (reify ActionListener
-                                  (actionPerformed [_ _] (submit!))))
-            ;; Add 4 components vertically with spacing
-            (.add content question-lbl)
-            (.add content (Box/createVerticalStrut 8))
-            (.add content details-scroll)
-            (.add content (Box/createVerticalStrut 8))
-            (.add content input-field)
-            (.add content (Box/createVerticalStrut 8))
-            (.add content submit-btn)
-
-            (.setContentPane dialog content)
-            (.setDefaultCloseOperation dialog JDialog/DISPOSE_ON_CLOSE)
-            (.addWindowListener dialog
-                                (proxy [WindowAdapter] []
-                                  (windowClosing [_]
-                                    (deliver result nil))))
-            (.pack dialog)
-            (.setLocationRelativeTo dialog nil)
-            (.setVisible dialog true))))
-       @result))))
+     (let [label (str (or agent-name "Agent") " asks")]
+       ;; Reset any active gray tint so the prompt is clearly visible
+       (print "\033[0m")
+       (println)
+       (println (str "\033[1m\033[36m" label "\033[0m"))
+       (println (str "\033[1m" question "\033[0m"))
+       (when (and details (not (str/blank? details)))
+         (println (str "\033[90m" details "\033[0m")))
+       (print "\033[1myour answer › \033[0m")
+       (flush)
+       (read-line)))))
 
 
 ;; ---------------------------------------------------------------------------
