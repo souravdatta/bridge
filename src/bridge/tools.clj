@@ -22,7 +22,8 @@
   - Result or error message
   Format: [TOOL] <name> | <SUCCESS/FAILURE> | params=<map> | result=<value>"
   (:require [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [bridge.diff    :as diff])
   (:import [java.nio.file Path Paths]
            [java.io File]))
 
@@ -563,10 +564,19 @@
                 :parameters params}}))
 
 (def ^:private cwd-tool-specs
-  "xAI tool specs for change-dir and pwd. Defined here rather than
-  auto-generated because their implementations live inside make-tool-impls
-  (they need access to the per-instance current-dir-atom)."
+  "xAI tool specs for tools whose implementations live inside make-tool-impls
+  (they capture per-instance state such as current-dir-atom or agent-name and
+  therefore cannot be auto-generated from public vars)."
   [{:type "function"
+    :function {:name        "write-file-with-diff"
+               :description "Write CONTENT to the file at PATH after showing a coloured diff preview and prompting for confirmation. Creates the file if it does not exist (all lines shown as additions). Returns \"Written: <path>\" on success. Throws if the user declines or the parent directory is missing. Always prefer this over write-file when creating or editing files."
+               :parameters  {:type       "object"
+                             :properties {"path"    {:type        "string"
+                                                     :description "File path (absolute or relative to the current working directory)."}
+                                          "content" {:type        "string"
+                                                     :description "Full new content for the file (UTF-8 string)."}}
+                             :required   ["path" "content"]}}}
+   {:type "function"
     :function {:name        "change-dir"
                :description "Change the current working directory to PATH. PATH may be relative (resolved from the current working directory) or absolute. The destination must be a directory within the agent's root working directory. Returns the new absolute CWD path."
                :parameters  {:type       "object"
@@ -664,6 +674,29 @@
      "today"            (fn [_]    (today))
      "time-offset"      (fn [args] (time-offset (:amount args) (:unit args)))
      "date-offset"      (fn [args] (date-offset (:amount args) (:unit args)))
+     "write-file-with-diff"
+                        (fn [args]
+                          (with-logging "write-file-with-diff" (dissoc args :content)
+                            (let [path     (:path args)
+                                  content  (:content args)
+                                  resolved (binding [*current-dir* @current-dir-atom]
+                                             (assert-allowed! working-dirs path))
+                                  ^File f  (io/file resolved)
+                                  old-text (if (.exists f) (slurp f) "")
+                                  diff-vec (diff/compute-diff old-text content)]
+                              (println (diff/render-diff diff-vec path))
+                              (if (every? #(= :eq (first %)) diff-vec)
+                                "No changes — file not written."
+                                (let [answer (ask-user "Apply these changes?"
+                                                       "Type \"yes\" to write the file."
+                                                       agent-name)]
+                                  (if (= "yes" (str/lower-case (str/trim (or answer ""))))
+                                    (do
+                                      (binding [*current-dir* @current-dir-atom]
+                                        (write-file working-dirs path content))
+                                      (str "Written: " resolved))
+                                    (throw (ex-info "Write cancelled by user."
+                                                    {:type :cancelled :path path}))))))))
      "change-dir"       (fn [args]
                           (with-logging "change-dir" args
                             (let [path     (:path args)

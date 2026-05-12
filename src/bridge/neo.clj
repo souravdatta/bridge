@@ -109,9 +109,13 @@
                              :required   ["command"]}}}])
 
 (defn- neo-tools-def
-  "Shared bridge.tools specs merged with Neo's execution tool specs."
+  "bridge.tools specs (bare write-file excluded in favour of write-file-with-diff)
+  merged with Neo's execution tool specs."
   []
-  (into (tools/tools-def) neo-exec-tool-specs))
+  (let [base (->> (tools/tools-def)
+                  (remove #(= "write-file" (get-in % [:function :name])))
+                  vec)]
+    (into base neo-exec-tool-specs)))
 
 (defn- neo-tool-impls
   "Shared bridge.tools impls merged with Neo's execution tool impls."
@@ -187,6 +191,10 @@ Use `ask-user` when required information is missing or materially ambiguous:
 - framework choice when several are plausible
 - operating system or execution environment when it affects the design
 - confirmation before destructive rewrites
+
+File writes — always call `write-file-with-diff` instead of `write-file`.
+It shows a coloured diff and prompts the user before touching the filesystem.
+`write-file` is not in your toolset; do not attempt to call it.
 
 If the user has given enough detail, do not ask questions just to be polite.
 Build.
