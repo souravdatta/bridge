@@ -1,6 +1,9 @@
 (ns bridge.llm
   (:require [clj-http.client :as http]
-            [cheshire.core :as json]))
+            [cheshire.core   :as json]
+            [clojure.java.io :as io]
+            [clojure.edn     :as edn])
+  (:import [java.nio.file Files StandardCopyOption]))
 
 ;; xAI Grok LLM client (OpenAI-compatible REST).
 ;; - Stateless chat-request for one-shot calls
@@ -21,6 +24,10 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private api-base "https://api.x.ai/v1")
+
+(def ^:private ^java.io.File sessions-dir
+  "Shared directory where all agent sessions are persisted to disk."
+  (io/file (System/getProperty "user.home") ".bridge" "sessions"))
 
 (def ^:private max-history
   "Hard cap on total messages kept per session. System prompt is always
@@ -127,22 +134,71 @@
 (defn- initial-messages [system]
   (if system [(sys-msg system)] []))
 
-(defn- make-session [name system]
+;; ---------------------------------------------------------------------------
+;; Session persistence
+;; ---------------------------------------------------------------------------
+
+(defn- session-file-path
+  "Path to the EDN file for SESSION under sessions-dir."
+  [session]
+  (io/file sessions-dir (str (:name session) ".edn")))
+
+(defn- save-session!
+  "Write session messages to disk atomically (write-then-move).
+  No-op when session was created with :persist? false."
+  [session]
+  (when (:persist? session)
+    (.mkdirs sessions-dir)
+    (let [^java.io.File f   (session-file-path session)
+          ^java.io.File tmp (java.io.File/createTempFile "bridge-session" ".edn" sessions-dir)]
+      (try
+        (spit tmp (pr-str @(:messages session)))
+        (Files/move (.toPath tmp)
+                    (.toPath f)
+                    (into-array StandardCopyOption
+                                [StandardCopyOption/ATOMIC_MOVE
+                                 StandardCopyOption/REPLACE_EXISTING]))
+        (catch Throwable t
+          (.delete tmp)
+          (throw t))))))
+
+(defn- load-session!
+  "Read persisted messages from disk. Returns the messages vector or nil
+  if no file exists or session was created with :persist? false."
+  [session]
+  (when (:persist? session)
+    (let [^java.io.File f (session-file-path session)]
+      (when (.exists f)
+        (try (edn/read-string (slurp f))
+             (catch Exception _ nil))))))
+
+(defn- make-session [name system persist?]
   {:name     name
    :system   system
+   :persist? persist?
    :messages (atom (initial-messages system))
    :lock     (Object.)})
 
 (defn get-session
   "Fetch (creating if absent) a session for the given agent name.
-  :system is applied only on creation; ignored for existing sessions."
-  [& {:keys [name system]}]
-  (-> (swap! registry
-             (fn [m]
-               (if (contains? m name)
-                 m
-                 (assoc m name (make-session name system)))))
-      (get name)))
+  :system is applied only on creation; ignored for existing sessions.
+  :persist? (default true) — when true, history is saved to and restored
+  from ~/.bridge/sessions/<name>.edn across JVM restarts. Pass false for
+  stateless/routing sessions that should never be persisted."
+  [& {:keys [name system persist?] :or {persist? true}}]
+  (let [session (-> (swap! registry
+                           (fn [m]
+                             (if (contains? m name)
+                               m
+                               (assoc m name (make-session name system persist?)))))
+                    (get name))]
+    ;; Restore from disk when messages are still at the initial state.
+    ;; This covers fresh JVM starts and post-forget-session recreations.
+    ;; reset-session deletes the file, so a reset session won't be restored.
+    (when (= @(:messages session) (initial-messages (:system session)))
+      (when-let [saved (load-session! session)]
+        (reset! (:messages session) saved)))
+    session))
 
 (defn session-messages
   "Snapshot of the current message vector."
@@ -150,9 +206,14 @@
   @(:messages session))
 
 (defn reset-session
-  "Clear history; re-seeds the system prompt if one was set at creation."
+  "Clear history; re-seeds the system prompt if one was set at creation.
+  Also deletes the persisted session file when :persist? is true."
   [session]
   (reset! (:messages session) (initial-messages (:system session)))
+  (when (:persist? session)
+    (let [^java.io.File f (session-file-path session)]
+      (when (.exists f)
+        (.delete f))))
   session)
 
 (defn forget-session
@@ -266,4 +327,6 @@
                (doseq [call (:tool_calls msg)]
                  (append-msg! session (run-tool-call tool-impls call)))
                (recur (inc iter)))
-             (:content msg))))))))
+             (do
+               (save-session! session)
+               (:content msg)))))))))

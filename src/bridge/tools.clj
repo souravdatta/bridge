@@ -69,16 +69,23 @@
       .toAbsolutePath
       .normalize))
 
+(def ^:dynamic ^:private *current-dir*
+  "Current working directory for the active tool call. Bound by make-tool-impls
+  closures to the agent's current-dir-atom value before each tool invocation.
+  When nil, resolve-path falls back to (first working-dirs)."
+  nil)
+
 (defn- resolve-path
-  "Resolve PATH relative to the first working directory if PATH is relative,
-  otherwise return PATH unchanged. This ensures relative paths are interpreted
-  relative to the agent's working directory, not the JVM's current directory."
+  "Resolve PATH relative to the agent's current working directory (*current-dir*)
+  when PATH is relative, otherwise return PATH unchanged. Falls back to the
+  first working directory when *current-dir* is nil (e.g. in tests that call
+  tool functions directly)."
   [working-dirs path]
   (let [p (Paths/get path (into-array String []))]
     (if (.isAbsolute p)
       path
-      ;; Relative path - join with first working-dir
-      (str (io/file (first working-dirs) path)))))
+      ;; Relative path — resolve against current-dir (or working-dir root as fallback)
+      (str (io/file (or *current-dir* (first working-dirs)) path)))))
 
 (defn- path-allowed?
   "Return true when NORMALIZED-PATH is equal to or nested inside at least
@@ -555,22 +562,41 @@
                 :description doc
                 :parameters params}}))
 
+(def ^:private cwd-tool-specs
+  "xAI tool specs for change-dir and pwd. Defined here rather than
+  auto-generated because their implementations live inside make-tool-impls
+  (they need access to the per-instance current-dir-atom)."
+  [{:type "function"
+    :function {:name        "change-dir"
+               :description "Change the current working directory to PATH. PATH may be relative (resolved from the current working directory) or absolute. The destination must be a directory within the agent's root working directory. Returns the new absolute CWD path."
+               :parameters  {:type       "object"
+                             :properties {"path" {:type        "string"
+                                                  :description "Directory path to change into. Relative paths resolve from the current working directory."}}
+                             :required   ["path"]}}}
+   {:type "function"
+    :function {:name        "pwd"
+               :description "Return the agent's current working directory as an absolute path string. Call this when you need to know where relative paths will resolve to."
+               :parameters  {:type       "object"
+                             :properties {}}}}])
+
 (defn tools-def
   "Return a vector of xAI-compatible tool specifications for all public
   tool functions in this namespace. Automatically discovers all public
   functions (except this one) and extracts their docstrings and parameter
-  schemas.
+  schemas. Also includes change-dir and pwd.
 
   Returns a vector suitable for passing as :tools to bridge.llm/chat."
   []
   (let [ns-publics (ns-publics 'bridge.tools)]
-    (->> ns-publics
-         vals
-         (filter (fn [v]
-                   (and (fn? @v)
-                        (not (#{'tools-def 'make-tool-impls 'format-tools-list} (:name (meta v)))))))
-         (map fn-to-tool-spec)
-         vec)))
+    (vec
+      (concat
+        (->> ns-publics
+             vals
+             (filter (fn [v]
+                       (and (fn? @v)
+                            (not (#{'tools-def 'make-tool-impls 'format-tools-list} (:name (meta v)))))))
+             (map fn-to-tool-spec))
+        cwd-tool-specs))))
 
 (defn format-tools-list
   "Return a human-readable bullet list of all available tools, one per line.
@@ -602,22 +628,53 @@
   Returns a map of {\"tool-name\" (fn [args-map] result)} suitable for passing
   as :tool-impls to bridge.llm/chat."
   [working-dirs agent-name]
-  {"read-file"       (fn [args] (read-file working-dirs (:path args)))
-   "list-dir"        (fn [args] (list-dir working-dirs (:path args)))
-   "write-file"      (fn [args] (write-file working-dirs (:path args) (:content args)))
-   "create-dirs"     (fn [args] (create-dirs working-dirs (:path args)))
-   "delete-file"     (fn [args] (delete-file working-dirs (:path args)))
-   "delete-dir"      (fn [args] (delete-dir working-dirs (:path args)))
-   "rename-file"     (fn [args] (rename-file working-dirs (:old-path args) (:new-path args)))
-   "rename-dir"      (fn [args] (rename-dir working-dirs (:old-path args) (:new-path args)))
-   "create-temp-file" (fn [args]
-                        (if (and (:prefix args) (:suffix args))
-                          (create-temp-file (:prefix args) (:suffix args))
-                          (if (:prefix args)
-                            (create-temp-file (:prefix args))
-                            (create-temp-file))))
-   "ask-user"        (fn [args] (ask-user (:question args) (:details args) agent-name))
-   "now"             (fn [_]    (now))
-   "today"           (fn [_]    (today))
-   "time-offset"     (fn [args] (time-offset (:amount args) (:unit args)))
-   "date-offset"     (fn [args] (date-offset (:amount args) (:unit args)))})
+  (let [current-dir-atom (atom (str (first working-dirs)))]
+    {"read-file"        (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (read-file working-dirs (:path args))))
+     "list-dir"         (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (list-dir working-dirs (:path args))))
+     "write-file"       (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (write-file working-dirs (:path args) (:content args))))
+     "create-dirs"      (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (create-dirs working-dirs (:path args))))
+     "delete-file"      (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (delete-file working-dirs (:path args))))
+     "delete-dir"       (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (delete-dir working-dirs (:path args))))
+     "rename-file"      (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (rename-file working-dirs (:old-path args) (:new-path args))))
+     "rename-dir"       (fn [args]
+                          (binding [*current-dir* @current-dir-atom]
+                            (rename-dir working-dirs (:old-path args) (:new-path args))))
+     "create-temp-file" (fn [args]
+                          (if (and (:prefix args) (:suffix args))
+                            (create-temp-file (:prefix args) (:suffix args))
+                            (if (:prefix args)
+                              (create-temp-file (:prefix args))
+                              (create-temp-file))))
+     "ask-user"         (fn [args] (ask-user (:question args) (:details args) agent-name))
+     "now"              (fn [_]    (now))
+     "today"            (fn [_]    (today))
+     "time-offset"      (fn [args] (time-offset (:amount args) (:unit args)))
+     "date-offset"      (fn [args] (date-offset (:amount args) (:unit args)))
+     "change-dir"       (fn [args]
+                          (with-logging "change-dir" args
+                            (let [path     (:path args)
+                                  resolved (binding [*current-dir* @current-dir-atom]
+                                             (assert-allowed! working-dirs path))
+                                  ^File f  (io/file resolved)]
+                              (when-not (.isDirectory f)
+                                (throw (ex-info (str "Not a directory: " path)
+                                                {:type :not-a-dir :path path})))
+                              (reset! current-dir-atom resolved)
+                              (str "CWD: " resolved))))
+     "pwd"              (fn [_]
+                          (with-logging "pwd" {}
+                            @current-dir-atom))}))

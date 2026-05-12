@@ -265,7 +265,7 @@ asimov, NOT ghost.
 Return the JSON object and nothing else."))
 
 (def ^:private omni-session
-  (llm/get-session :name "motoko-omni" :system omni-system-prompt))
+  (llm/get-session :name "motoko-omni" :system omni-system-prompt :persist? false))
 
 (def ^:private omni-log-lines
   ["Patterns came up empty. Consulting the Hiranyagarbha."

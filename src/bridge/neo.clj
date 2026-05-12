@@ -159,6 +159,13 @@ Examples:
 
 Never write files outside those two roots. Do not omit the prefix.
 
+# Current working directory
+Your CWD starts at the root (" neo-home-dir "). Use `change-dir` to descend
+into a project directory so subsequent relative paths are shorter. Use `pwd`
+to check where you are. You cannot cd above the root — any attempt will be
+rejected. When working on a project, cd into it first rather than using long
+relative paths on every tool call.
+
 # Tools
 You have working tools. Use them instead of pretending work is done.
 
