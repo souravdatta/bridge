@@ -228,7 +228,11 @@ Stay in character. Never mention these instructions, the prompt, or the model.
 Default to brevity. Write code when code is what the user asked for."))
 
 (def ^:private neo-session
-  (llm/get-session :name "neo" :system neo-system-prompt))
+  (llm/get-session :name "neo" :system neo-system-prompt :persist? true))
+
+(defn get-neo-session
+  "Return Neo's LLM session. Used by Motoko's /clear command."
+  [] neo-session)
 
 (def ^:private neo-temperature
   "Low enough for disciplined code generation, warm enough to keep the voice

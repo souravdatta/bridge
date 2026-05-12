@@ -128,7 +128,11 @@ Stay in character. Never mention these instructions, the prompt, the
 model, or any framing. Default to brevity. Earn every word."))
 
 (def ^:private ghost-session
-  (llm/get-session :name "ghost" :system ghost-system-prompt))
+  (llm/get-session :name "ghost" :system ghost-system-prompt :persist? true))
+
+(defn get-ghost-session
+  "Return Ghost's LLM session. Used by Motoko's /clear command."
+  [] ghost-session)
 
 (defn record-context!
   "Mirror a (user, assistant) exchange into Ghost's chat history without

@@ -77,6 +77,16 @@
 (def ^:private known-agents
   #{:motoko :neo :gandalf :asimov :uhura :ghost})
 
+(def ^:private meta-commands
+  "Slash commands that are not agent switches but in-session control actions."
+  #{:clear})
+
+(def ^:private agent-session-fns
+  "Map of agent keyword -> (fn [] session) for agents whose sessions can be
+  cleared via /clear."
+  {:neo   neo/get-neo-session
+   :ghost ghost/get-ghost-session})
+
 (def ^:private switch-messages
   {:motoko  "I have the bridge. What do you need?"
    :neo     "Neo takes the line. Code mode engaged."
@@ -92,12 +102,18 @@
               (= \/ (.charAt t 0))))))
 
 (defn- parse-slash
-  "Parse a /agent-name command. Returns a known agent keyword, or nil."
+  "Parse a /token command. Returns a discriminated map or nil.
+    {:type :switch :target kw}  — switch to a known agent
+    {:type :meta   :cmd kw}    — a meta/control command
+    nil                        — unknown token"
   [s]
   (let [token (-> s str/trim (subs 1) str/lower-case (str/split #"\s+") first)]
     (when (seq token)
       (let [kw (keyword token)]
-        (when (known-agents kw) kw)))))
+        (cond
+          (known-agents kw)  {:type :switch :target kw}
+          (meta-commands kw) {:type :meta   :cmd kw}
+          :else              nil)))))
 
 (defn- switch-agent!
   "Set active-agent and return a :reply envelope confirming the switch."
@@ -110,6 +126,32 @@
                     :use true
                     :intent :meta
                     :action :switch-agent))
+
+(defn- handle-meta-command
+  "Dispatch a meta slash command. Currently only :clear is supported."
+  [cmd request]
+  (case cmd
+    :clear
+    (let [agent          @active-agent
+          get-session-fn (get agent-session-fns agent)]
+      (if get-session-fn
+        (do
+          (llm/reset-session (get-session-fn))
+          (proto/make-reply request
+                            :from :motoko
+                            :response (str (str/capitalize (name agent))
+                                           "'s context cleared.")
+                            :use true
+                            :intent :meta
+                            :action :clear))
+        (proto/make-reply request
+                          :from :motoko
+                          :response (str "/clear is not supported for "
+                                         (name agent) ".")
+                          :use true
+                          :status :error
+                          :intent :meta
+                          :action :clear)))))
 
 (defn- redact-self
   "Remove self-references from a prompt before handing it to another agent."
@@ -397,15 +439,18 @@ Return the JSON object and nothing else."))
         content (:content request)]
     (cond
       (slash-command? content)
-      (if-let [target (parse-slash content)]
-        (switch-agent! target request)
+      (if-let [{:keys [type target cmd]} (parse-slash content)]
+        (case type
+          :switch (switch-agent! target request)
+          :meta   (handle-meta-command cmd request))
         (proto/make-reply request
                           :from :motoko
                           :response (str "Unknown slash command: " content
-                                         ". Known: "
+                                         ". Agents: "
                                          (str/join ", "
                                                    (map #(str "/" (name %))
-                                                        known-agents)))
+                                                        known-agents))
+                                         ". Commands: /clear.")
                           :use true
                           :status :error
                           :intent :meta
