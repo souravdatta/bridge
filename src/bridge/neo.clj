@@ -3,7 +3,8 @@
             [bridge.llm         :as llm]
             [bridge.tools       :as tools]
             [clojure.java.io    :as io]
-            [clojure.string     :as str]))
+            [clojure.string     :as str])
+  (:import [java.lang ProcessBuilder$Redirect]))
 
 (def ^:private neo-name
   "Display name for this agent (used in dialogs, logs, etc.)."
@@ -27,6 +28,41 @@
   "Create neo-home-dir (and parents) if they do not yet exist."
   []
   (.mkdirs (io/file neo-home-dir)))
+
+;; ANSI styles for command output banner
+(def ^:private cmd-yellow  "\033[33m")
+(def ^:private cmd-gray    "\033[90m")
+(def ^:private cmd-reset   "\033[0m")
+(def ^:private cmd-sep     (str cmd-yellow (apply str (repeat 52 "─")) cmd-reset))
+
+(defn- run-command
+  "Execute CMD-ARGS as a subprocess in WORK-DIR.
+  - Stdin  is inherited from the JVM — the user can type responses to
+    interactive prompts in the terminal as normal.
+  - Stdout and stderr are merged, printed line-by-line with a styled
+    banner, and accumulated into a string returned to the LLM so it can
+    inspect output, detect errors, and take follow-up action.
+  Returns a result string: \"Exit: N\\n<output>\""
+  [cmd-args work-dir shell-label]
+  (ensure-home-dir!)
+  (let [proc (-> (ProcessBuilder. cmd-args)
+                 (.directory (io/file work-dir))
+                 (.redirectErrorStream true)
+                 (.redirectInput ProcessBuilder$Redirect/INHERIT)
+                 (.start))
+        sb   (StringBuilder.)]
+    (println (str cmd-yellow "▶ " shell-label cmd-reset))
+    (println cmd-sep)
+    (with-open [rdr (io/reader (.getInputStream proc))]
+      (doseq [line (line-seq rdr)]
+        (println (str cmd-gray "│ " cmd-reset line))
+        (.append sb line)
+        (.append sb "\n")))
+    (let [exit   (.waitFor proc)
+          output (str sb)]
+      (println (str cmd-sep))
+      (println (str cmd-yellow "▶ exit " exit cmd-reset))
+      (str "Exit: " exit "\n" (if (seq output) output "(no output)")))))
 
 (defn- confirmed?
   "Prompt the user for confirmation before running COMMAND.
@@ -56,13 +92,7 @@
    (when (and confirm (not (confirmed? command "bash")))
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
-   (ensure-home-dir!)
-   (let [proc (-> (ProcessBuilder. ["bash" "-c" command])
-                  (.directory (io/file neo-home-dir))
-                  (.inheritIO)
-                  (.start))
-         exit (.waitFor proc)]
-     (str "Exit: " exit " [output written to terminal]"))))
+   (run-command ["bash" "-c" command] neo-home-dir (str "bash: " command))))
 
 (defn run-powershell
   "Execute COMMAND in PowerShell with Neo's home directory as the working
@@ -80,13 +110,7 @@
    (when (and confirm (not (confirmed? command "PowerShell")))
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
-   (ensure-home-dir!)
-   (let [proc (-> (ProcessBuilder. ["powershell" "-Command" command])
-                  (.directory (io/file neo-home-dir))
-                  (.inheritIO)
-                  (.start))
-         exit (.waitFor proc)]
-     (str "Exit: " exit " [output written to terminal]"))))
+   (run-command ["powershell" "-Command" command] neo-home-dir (str "powershell: " command))))
 
 (def ^:private neo-exec-tool-specs
   [{:type "function"
