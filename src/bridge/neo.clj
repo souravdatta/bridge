@@ -31,7 +31,6 @@
 
 ;; ANSI styles for command output banner
 (def ^:private cmd-yellow  "\033[33m")
-(def ^:private cmd-gray    "\033[90m")
 (def ^:private cmd-reset   "\033[0m")
 (def ^:private cmd-sep     (str cmd-yellow (apply str (repeat 52 "─")) cmd-reset))
 
@@ -39,9 +38,11 @@
   "Execute CMD-ARGS as a subprocess in WORK-DIR.
   - Stdin  is inherited from the JVM — the user can type responses to
     interactive prompts in the terminal as normal.
-  - Stdout and stderr are merged, printed line-by-line with a styled
-    banner, and accumulated into a string returned to the LLM so it can
-    inspect output, detect errors, and take follow-up action.
+  - Stdout and stderr are merged and forwarded to the terminal in small
+    chunks with immediate flushing, so prompts without trailing newlines
+    appear before the user is expected to type.
+  - All output is accumulated and returned as the tool result string so
+    the LLM can inspect it, detect errors, and take follow-up action.
   Returns a result string: \"Exit: N\\n<output>\""
   [cmd-args work-dir shell-label]
   (ensure-home-dir!)
@@ -50,17 +51,23 @@
                  (.redirectErrorStream true)
                  (.redirectInput ProcessBuilder$Redirect/INHERIT)
                  (.start))
-        sb   (StringBuilder.)]
+        sb   (StringBuilder.)
+        buf  (byte-array 256)]
     (println (str cmd-yellow "▶ " shell-label cmd-reset))
     (println cmd-sep)
-    (with-open [rdr (io/reader (.getInputStream proc))]
-      (doseq [line (line-seq rdr)]
-        (println (str cmd-gray "│ " cmd-reset line))
-        (.append sb line)
-        (.append sb "\n")))
+    (let [^java.io.InputStream is (.getInputStream proc)]
+      (loop []
+        (let [n (.read is buf 0 (alength buf))]
+          (when (pos? n)
+            (let [chunk (String. buf 0 n "UTF-8")]
+              (.append sb chunk)
+              (print chunk)
+              (flush))
+            (recur)))))
     (let [exit   (.waitFor proc)
           output (str sb)]
-      (println (str cmd-sep))
+      (println)
+      (println cmd-sep)
       (println (str cmd-yellow "▶ exit " exit cmd-reset))
       (str "Exit: " exit "\n" (if (seq output) output "(no output)")))))
 
