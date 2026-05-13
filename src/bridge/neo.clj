@@ -34,6 +34,11 @@
 (def ^:private cmd-reset   "\033[0m")
 (def ^:private cmd-sep     (str cmd-yellow (apply str (repeat 52 "─")) cmd-reset))
 
+(def neo-cwd
+  "Atom holding Neo's current working directory. Read by the console for
+  prompt display; updated by the change-dir tool."
+  (atom neo-home-dir))
+
 (defn- run-command
   "Execute CMD-ARGS as a subprocess in WORK-DIR.
   - Stdin  is inherited from the JVM — the user can type responses to
@@ -84,13 +89,12 @@
     (= "yes" (str/lower-case (str/trim (or answer ""))))))
 
 (defn run-bash
-  "Execute COMMAND in a bash shell with Neo's home directory as the working
-  directory.
+  "Execute COMMAND in a bash shell in Neo's current working directory.
 
   Parameters
     command – bash command string to execute.
     confirm – when true (the default), a dialog prompts the user for
-              confirmation before execution; type \"yes\" to proceed.
+              confirmation before execution; type "yes" to proceed.
 
   Returns a formatted string with exit code, stdout, and stderr.
   Throws ex-info {:type :cancelled} when the user declines confirmation."
@@ -99,16 +103,15 @@
    (when (and confirm (not (confirmed? command "bash")))
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
-   (run-command ["bash" "-c" command] neo-home-dir (str "bash: " command))))
+   (run-command ["bash" "-c" command] @neo-cwd (str "bash: " command))))
 
 (defn run-powershell
-  "Execute COMMAND in PowerShell with Neo's home directory as the working
-  directory.
+  "Execute COMMAND in PowerShell in Neo's current working directory.
 
   Parameters
     command – PowerShell command string to execute.
     confirm – when true (the default), a dialog prompts the user for
-              confirmation before execution; type \"yes\" to proceed.
+              confirmation before execution; type "yes" to proceed.
 
   Returns a formatted string with exit code, stdout, and stderr.
   Throws ex-info {:type :cancelled} when the user declines confirmation."
@@ -117,7 +120,7 @@
    (when (and confirm (not (confirmed? command "PowerShell")))
      (throw (ex-info "Command execution cancelled by user."
                      {:type :cancelled :command command})))
-   (run-command ["powershell" "-Command" command] neo-home-dir (str "powershell: " command))))
+   (run-command ["powershell" "-Command" command] @neo-cwd (str "powershell: " command))))
 
 (def ^:private neo-exec-tool-specs
   [{:type "function"
@@ -138,11 +141,6 @@
                                           "confirm" {:type        "boolean"
                                                      :description "Prompt for confirmation before executing. Omit or pass true to confirm (default); false to skip."}}
                              :required   ["command"]}}}])
-
-(def neo-cwd
-  "Atom holding Neo's current working directory. Read by the console for
-  prompt display; updated by the change-dir tool."
-  (atom neo-home-dir))
 
 (defn- neo-tools-def
   "bridge.tools specs (bare write-file excluded in favour of write-file-with-diff)
