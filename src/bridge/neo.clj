@@ -30,9 +30,11 @@
   (.mkdirs (io/file neo-home-dir)))
 
 ;; ANSI styles for command output banner
-(def ^:private cmd-yellow  "\033[33m")
-(def ^:private cmd-reset   "\033[0m")
-(def ^:private cmd-sep     (str cmd-yellow (apply str (repeat 52 "─")) cmd-reset))
+(def ^:private cmd-yellow     "\033[33m")
+(def ^:private cmd-bold-white "\033[1;97m")  ; bright bold white — command text
+(def ^:private cmd-reset      "\033[0m")
+(def ^:private cmd-gray       "\033[90m")    ; restore dim-gray after banner
+(def ^:private cmd-sep        (str cmd-yellow (apply str (repeat 52 "─")) cmd-reset))
 
 (def neo-cwd
   "Atom holding Neo's current working directory. Read by the console for
@@ -58,7 +60,7 @@
                  (.start))
         sb   (StringBuilder.)
         buf  (byte-array 256)]
-    (println (str cmd-yellow "▶ " shell-label cmd-reset))
+    (println (str cmd-reset cmd-yellow "\u25b6 " cmd-bold-white shell-label cmd-reset))
     (println cmd-sep)
     (let [^java.io.InputStream is (.getInputStream proc)]
       (loop []
@@ -73,7 +75,9 @@
           output (str sb)]
       (println)
       (println cmd-sep)
-      (println (str cmd-yellow "▶ exit " exit cmd-reset))
+      (println (str cmd-yellow "\u25b6 exit " exit cmd-reset))
+      (print cmd-gray)
+      (flush)
       (str "Exit: " exit "\n" (if (seq output) output "(no output)")))))
 
 (defn- confirmed?
