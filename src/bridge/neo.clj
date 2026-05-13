@@ -92,9 +92,9 @@
   "Execute COMMAND in a bash shell in Neo's current working directory.
 
   Parameters
-    command – bash command string to execute.
-    confirm – when true (the default), a dialog prompts the user for
-              confirmation before execution; type "yes" to proceed.
+    command \u2013 bash command string to execute.
+    confirm \u2013 when true (the default), a dialog prompts the user for
+              confirmation before execution; type \"yes\" to proceed.
 
   Returns a formatted string with exit code, stdout, and stderr.
   Throws ex-info {:type :cancelled} when the user declines confirmation."
@@ -109,9 +109,9 @@
   "Execute COMMAND in PowerShell in Neo's current working directory.
 
   Parameters
-    command – PowerShell command string to execute.
-    confirm – when true (the default), a dialog prompts the user for
-              confirmation before execution; type "yes" to proceed.
+    command \u2013 PowerShell command string to execute.
+    confirm \u2013 when true (the default), a dialog prompts the user for
+              confirmation before execution; type \"yes\" to proceed.
 
   Returns a formatted string with exit code, stdout, and stderr.
   Throws ex-info {:type :cancelled} when the user declines confirmation."
