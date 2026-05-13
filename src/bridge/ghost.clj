@@ -134,6 +134,11 @@ model, or any framing. Default to brevity. Earn every word."))
   "Return Ghost's LLM session. Used by Motoko's /clear command."
   [] ghost-session)
 
+(def ghost-cwd
+  "Atom holding Ghost's current working directory. Read by the console for
+  prompt display; updated by the change-dir tool."
+  (atom ghost-working-dir))
+
 (defn record-context!
   "Mirror a (user, assistant) exchange into Ghost's chat history without
   hitting the LLM. Lets Motoko's pattern-matched replies inform later
@@ -156,7 +161,7 @@ model, or any framing. Default to brevity. Earn every word."))
                          (or (:content request) "")
                          {:temperature ghost-temperature
                           :tools (tools/tools-def)
-                          :tool-impls (tools/make-tool-impls [ghost-working-dir] ghost-name)})]
+                          :tool-impls (tools/make-tool-impls [ghost-working-dir] ghost-name ghost-cwd)})]
       (proto/make-reply request
                         :response text
                         :use true

@@ -139,6 +139,11 @@
                                                      :description "Prompt for confirmation before executing. Omit or pass true to confirm (default); false to skip."}}
                              :required   ["command"]}}}])
 
+(def neo-cwd
+  "Atom holding Neo's current working directory. Read by the console for
+  prompt display; updated by the change-dir tool."
+  (atom neo-home-dir))
+
 (defn- neo-tools-def
   "bridge.tools specs (bare write-file excluded in favour of write-file-with-diff)
   merged with Neo's execution tool specs."
@@ -151,12 +156,11 @@
 (defn- neo-tool-impls
   "Shared bridge.tools impls merged with Neo's execution tool impls."
   []
-  (merge (tools/make-tool-impls [neo-home-dir] neo-name)
+  (merge (tools/make-tool-impls [neo-home-dir] neo-name neo-cwd)
          {"run-bash"       (fn [args] (run-bash       (:command args)
                                                       (get args :confirm true)))
           "run-powershell" (fn [args] (run-powershell (:command args)
-                                                      (get args :confirm true)))})
-)
+                                                      (get args :confirm true)))}))
 
 (def ^:private neo-system-prompt
   (str
@@ -184,22 +188,25 @@ Your filesystem has two separate roots under " neo-home-dir ":
 - projects/     -> use this for full applications, libraries, services, CLIs,
   frameworks, multi-file repos, or anything that needs structure.
 
-All file tool calls must use a relative path that starts with either
-`stand_alone/` or `projects/`.
+All file paths passed to tools are resolved relative to your current working
+directory (CWD). Keep that in mind when choosing what path to pass:
 
-Examples:
-- `stand_alone/fizzbuzz.py`
-- `projects/url-shortener/src/main.ts`
-- `projects/chess-engine/README.md`
+- When CWD is the root, paths must start with `stand_alone/` or `projects/`.
+  Example: `projects/url-shortener/src/main.ts`
 
-Never write files outside those two roots. Do not omit the prefix.
+- When you have cd'd into a project, use paths relative to that directory.
+  Example: after `change-dir projects/url-shortener`, write `src/main.ts`
+  (not `projects/url-shortener/src/main.ts`).
+
+Never write files outside those two roots. Use `pwd` when unsure where you are.
 
 # Current working directory
 Your CWD starts at the root (" neo-home-dir "). Use `change-dir` to descend
-into a project directory so subsequent relative paths are shorter. Use `pwd`
-to check where you are. You cannot cd above the root — any attempt will be
-rejected. When working on a project, cd into it first rather than using long
-relative paths on every tool call.
+into a project directory — after that, all relative paths (writes, reads,
+directory creation) resolve under that directory. Use `pwd` to check where
+you are. You cannot cd above the root — any attempt will be rejected.
+When working on a project, cd into it first so every tool call uses short,
+clean relative paths instead of long ones from the root.
 
 # Tools
 You have working tools. Use them instead of pretending work is done.

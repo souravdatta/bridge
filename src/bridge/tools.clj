@@ -637,8 +637,9 @@
 
   Returns a map of {\"tool-name\" (fn [args-map] result)} suitable for passing
   as :tool-impls to bridge.llm/chat."
-  [working-dirs agent-name]
-  (let [current-dir-atom (atom (str (first working-dirs)))]
+  ([working-dirs agent-name]
+   (make-tool-impls working-dirs agent-name (atom (str (first working-dirs)))))
+  ([working-dirs agent-name current-dir-atom]
     {"read-file"        (fn [args]
                           (binding [*current-dir* @current-dir-atom]
                             (read-file working-dirs (:path args))))

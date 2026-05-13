@@ -19,10 +19,33 @@
 (def ^:private CYAN  "\033[36m")   ; cyan       — agent name
 (def ^:private RESET "\033[0m")    ; reset all attributes
 
+(def ^:private DIM   "\033[2m")    ; dim        — cwd path in prompt
+
 
 ;; ---------------------------------------------------------------------------
-;; Reply unwrapping
+;; Dynamic prompt
 ;; ---------------------------------------------------------------------------
+
+(defn- shorten-path
+  "Replace the user's home directory prefix with ~ in PATH-STR."
+  [path-str]
+  (let [home (System/getProperty "user.home")]
+    (if (str/starts-with? path-str home)
+      (str "~" (subs path-str (count home)))
+      path-str)))
+
+(defn- build-prompt
+  "Build the REPL input prompt reflecting the active agent and its CWD.
+  Format: <Agent> [<cwd>] › when the agent has a tracked directory.
+           <Agent> ›       for agents without a CWD atom."
+  []
+  (let [agent     @motoko/active-agent
+        label     (-> agent name str/capitalize)
+        cwd-atom  (get motoko/agent-cwd-atoms agent)
+        cwd-part  (when cwd-atom
+                    (str DIM " [" (shorten-path @cwd-atom) "]" RESET BOLD))]
+    (str BOLD CYAN label RESET BOLD (or cwd-part "") " › " RESET)))
+
 
 (defn- reply-text [reply]
   (cond
@@ -53,7 +76,7 @@
   ([api-key]
    (println (str BOLD CYAN "Bridge" RESET " — type 'exit' or Ctrl-D to quit\n"))
    (loop []
-     (print (str BOLD "you › " RESET))
+     (print (build-prompt))
      (flush)
      (when-let [raw (read-line)]
        (let [text (str/trim raw)]

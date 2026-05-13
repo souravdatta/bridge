@@ -72,7 +72,7 @@
 ;; any other agent) with a slash command: /motoko, /neo, /gandalf, etc.
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private active-agent (atom :motoko))
+(defonce active-agent (atom :motoko))
 
 (def ^:private known-agents
   #{:motoko :neo :gandalf :asimov :uhura :ghost})
@@ -86,6 +86,12 @@
   cleared via /clear."
   {:neo   neo/get-neo-session
    :ghost ghost/get-ghost-session})
+
+(def agent-cwd-atoms
+  "Map of agent keyword -> cwd atom, for agents that track a working directory.
+  Read by the console to build the dynamic prompt."
+  {:neo   neo/neo-cwd
+   :ghost ghost/ghost-cwd})
 
 (def ^:private switch-messages
   {:motoko  "I have the bridge. What do you need?"
