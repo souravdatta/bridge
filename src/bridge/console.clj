@@ -2,24 +2,20 @@
   "CLI REPL for Bridge.
 
   Read a line from stdin → send to Motoko → print response.
-  All intermediate agent/routing/tool output is flushed to stdout wrapped
-  in dark-gray ANSI so it recedes visually. The final response is printed
-  in the default terminal colour. No GUI dependencies."
+  All intermediate agent/routing/tool output is flushed to stdout without styling.
+  The final response is printed in the default terminal colour. No GUI dependencies."
   (:require [bridge.motoko :as motoko]
             [bridge.llm    :as llm]
             [clojure.string :as str]))
 
-
 ;; ---------------------------------------------------------------------------
-;; ANSI helpers — no external deps, pure escape sequences
+;; Banner for agent messages and ask-user tool calls
 ;; ---------------------------------------------------------------------------
 
-(def ^:private GRAY  "\033[90m")   ; dark gray  — intermediate chatter
-(def ^:private BOLD  "\033[1m")    ; bold       — labels
-(def ^:private CYAN  "\033[36m")   ; cyan       — agent name
-(def ^:private RESET "\033[0m")    ; reset all attributes
-
-(def ^:private DIM   "\033[2m")    ; dim        — cwd path in prompt
+(def ^:private AGENT-BANNER-TOP "[[ AGENT >>")
+(def ^:private AGENT-BANNER-BOTTOM "]]\n")
+(def ^:private ASK-USER-BANNER-TOP "[[ ASK USER >>\n") 
+(def ^:private ASK-USER-BANNER-BOTTOM "]]\n")
 
 
 ;; ---------------------------------------------------------------------------
@@ -43,8 +39,8 @@
         label     (-> agent name str/capitalize)
         cwd-atom  (get motoko/agent-cwd-atoms agent)
         cwd-part  (when cwd-atom
-                    (str DIM " [" (shorten-path @cwd-atom) "]" RESET BOLD))]
-    (str BOLD CYAN label RESET BOLD (or cwd-part "") " › " RESET)))
+                    (str " [" (shorten-path @cwd-atom) "]"))]
+    (str label (or cwd-part "") " › ")))
 
 
 (defn- reply-text [reply]
@@ -74,7 +70,7 @@
   Falls back to the existing dynamic var or XAI_API_KEY env var."
   ([] (start nil))
   ([api-key]
-   (println (str BOLD CYAN "Bridge" RESET " — type 'exit' or Ctrl-D to quit\n"))
+   (println "Bridge — type 'exit' or Ctrl-D to quit\n")
    (loop []
      (print (build-prompt))
      (flush)
@@ -82,8 +78,7 @@
        (let [text (str/trim raw)]
          (when-not (= text "exit")
            (when-not (str/blank? text)
-             ;; Switch terminal to gray — all intermediate println calls land here
-             (print GRAY)
+             ;; No styling for intermediate output
              (flush)
              (let [reply (try
                            (binding [llm/*api-key* (or api-key llm/*api-key*)]
@@ -91,11 +86,19 @@
                            (catch Throwable t
                              {:msg/from :motoko
                               :response (str "[error: " (.getMessage t) "]")}))]
-               ;; Reset color, ensure we start on a fresh line, then print reply
-               (print RESET)
+               ;; No styling reset, ensure fresh line, then print reply with banners
                (flush)
                (println)
-               (println (str BOLD CYAN (agent-label reply) RESET
-                             " › " (reply-text reply)))
+               (if (and (map? reply) (:tool-call reply) (= (:tool-call reply) :ask-user))
+                 (do
+                   (println ASK-USER-BANNER-TOP)
+                   (println (str (agent-label reply) 
+                                 " › " (reply-text reply)))
+                   (println ASK-USER-BANNER-BOTTOM))
+                 (do
+                   (println AGENT-BANNER-TOP)
+                   (println (str (agent-label reply) 
+                                 " › " (reply-text reply)))
+                   (println AGENT-BANNER-BOTTOM)))
                (println)))
            (recur)))))))
